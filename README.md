@@ -1,17 +1,15 @@
-
 # Technical-BA-SQL-Toolbox 📊
 **Converting Raw Data into Strategic Business Decisions**
 
 ## 🎯 Project Overview
 This repository isn't just a collection of scripts; it's a simulated analytical engine for an E-commerce business. As a Technical BA, I've designed this to solve real-world problems: data integrity, revenue scaling, and customer segmentation.
 
-## 🏗️ Data Architecture (ER Diagram)
-The database follows a normalized relational structure:
-- **Customers (1:N) Orders**: Tracks individual lifecycle and lifetime value (LTV).
-- **Categories (1:N) Products**: Groups inventory for market-basket analysis.
-- **Products (1:N) Orders**: Logs transaction-level performance.
-
-
+## 🏗️ Data Structure & Logic
+The database follows a normalized relational structure to ensure data consistency and optimized analytical processing:
+- **Customers**: Primary entity for tracking individual lifecycle and lifetime value (LTV).
+- **Orders**: Central transaction table linked to Customers and Products.
+- **Products**: Inventory master data categorized for market-basket analysis.
+- **Categories**: Taxonomical layer for high-level revenue reporting.
 
 ## 💡 Key Business Questions Answered
 | Business Goal | SQL Technique | Business Insight |
