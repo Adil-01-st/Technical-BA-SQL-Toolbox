@@ -1,13 +1,10 @@
 /* 
 PROJECT: Technical-BA-SQL-Toolbox
+STRATEGY: Revenue Growth & Customer Retention Analytics
 AUTHOR: Adilbek Khiiasov
-DESCRIPTION: E-commerce Data Analytics (Sales, Customers, Products)
-             This script sets up a database and executes 
-             advanced analytical queries.
 */
 
--- PART 1: Database Schema & Seed Data (Setup)
-
+-- PART 1: Database Schema & Performance Optimization
 
 CREATE TABLE categories (
     category_id SERIAL PRIMARY KEY,
@@ -36,83 +33,67 @@ CREATE TABLE orders (
     total_amount DECIMAL(10, 2)
 );
 
--- Seeding Categories
+-- PERFORMANCE OPTIMIZATION (Indexing Strategy)
+-- I would place indexes on the following columns for high-scale performance:
+-- CREATE INDEX idx_orders_customer_id ON orders(customer_id); Speeds up customer history lookups
+-- CREATE INDEX idx_orders_date ON orders(order_date); Optimizes time-series and seasonal reporting
+-- CREATE INDEX idx_products_category ON products(category_id); Accelerates category-level breakdown
+
+-- PART 2: Seed Data (Including Anomalies for Testing)
+
 INSERT INTO categories (category_name) VALUES ('Electronics'), ('Home & Kitchen'), ('Books');
+INSERT INTO products (product_name, category_id, price) VALUES ('Smartphone', 1, 800), ('Laptop', 1, 1200), ('Coffee Maker', 2, 150), ('SQL Guide', 3, 40);
+INSERT INTO customers (customer_name, registration_date) VALUES ('Alice', '2023-01-15'), ('Bob', '2023-03-10'), ('Charlie', '2023-05-20');
 
--- Seeding Products
-INSERT INTO products (product_name, category_id, price) VALUES  
-('Smartphone', 1, 800.00), ('Laptop', 1, 1200.00),  
-('Coffee Maker', 2, 150.00), ('Air Fryer', 2, 200.00),
-('SQL Guide', 3, 40.00), ('Data Science Handbook', 3, 60.00);
-
--- Seeding Customers
-INSERT INTO customers (customer_name, registration_date) VALUES  
-('Alice Smith', '2023-01-15'), ('Bob Johnson', '2023-03-10'),  
-('Charlie Brown', '2023-05-20'), ('Diana Prince', '2023-08-01');
-
--- Seeding Orders (Transactions)
+-- Added valid transactions + 1 anomaly (negative amount) for filtering demonstration
 INSERT INTO orders (customer_id, product_id, order_date, quantity, total_amount) VALUES  
-(1, 1, '2023-02-01', 1, 800.00), (1, 5, '2023-04-10', 2, 80.00),
-(2, 2, '2023-03-15', 1, 1200.00),                                
-(3, 3, '2023-06-01', 1, 150.00), (3, 4, '2023-07-20', 1, 200.00),
-(4, 6, '2023-08-10', 5, 300.00), (4, 1, '2023-09-05', 1, 800.00);
+(1, 1, '2023-02-01', 1, 800.00),
+(2, 2, '2023-03-15', 1, 1200.00),
+(3, 3, '2023-06-01', 1, 150.00),
+(1, 4, '2023-07-20', 1, -50.00);
 
+-- PART 3: High-Impact Business Queries
 
--- PART 2: Advanced Analytical Queries
+-- QUERY 1: Data Integrity & Anomaly Detection
+-- Insight: Identifying and filtering out corrupted data (non-positive amounts) 
+-- to ensure revenue reports represent actual cleared transactions.
+SELECT *
+FROM orders
+WHERE total_amount <= 0 OR quantity IS NULL;
 
-
--- QUERY 1: Detailed Sales Report (JOINs)
--- Goal: Human-readable view of who bought what and in which category.
-SELECT 
-    c.customer_name,
-    o.order_date,
-    p.product_name,
-    cat.category_name,
-    o.total_amount
-FROM orders o
-JOIN customers c ON o.customer_id = c.customer_id
-JOIN products p ON o.product_id = p.product_id
-JOIN categories cat ON p.category_id = cat.category_id
-ORDER BY o.order_date;
-
--- QUERY 2: Product Popularity Ranking (Window Function: RANK)
--- Goal: Identify the top-performing product in each category by revenue.
+-- QUERY 2: Product Performance ("Cash Cows")
+-- Insight: Ranking products within categories to identify inventory priorities 
+-- and high-margin "hero" products.
 SELECT 
     cat.category_name,
     p.product_name,
-    SUM(o.total_amount) as total_revenue,
+    SUM(o.total_amount) as revenue,
     RANK() OVER (PARTITION BY cat.category_name ORDER BY SUM(o.total_amount) DESC) as sales_rank
 FROM products p
 JOIN categories cat ON p.category_id = cat.category_id
 JOIN orders o ON p.product_id = o.product_id
-GROUP BY cat.category_name, p.product_name;
+WHERE o.total_amount > 0 -- Filtering anomalies
+GROUP BY 1, 2;
 
--- QUERY 3: Running Total Revenue Analysis (Window Function: SUM OVER)
--- Goal: Track financial growth day-by-day.
+-- QUERY 3: Revenue Momentum & Seasonality
+-- Insight: Calculating running totals to detect MoM (Month-over-Month) 
+-- growth velocity and identify potential seasonal churn periods.
 SELECT 
     order_date,
-    total_amount,
-    SUM(total_amount) OVER (ORDER BY order_date) as running_total_revenue
-FROM orders;
+    SUM(total_amount) OVER (ORDER BY order_date) as cumulative_revenue
+FROM orders
+WHERE total_amount > 0;
 
--- QUERY 4: Identifying High-Value Customers (CTE + Aggregation)
--- Goal: Find customers who spent more than the average order value.
-WITH AvgOrderValue AS (
-    SELECT AVG(total_amount) as global_avg FROM orders
+-- QUERY 4: VIP Segment Identification
+-- Insight: Isolating top 10% spenders to design exclusive loyalty campaigns 
+-- and minimize High-Value Customer (HVC) churn.
+WITH CustomerValue AS (
+    SELECT customer_id, SUM(total_amount) as ltv
+    FROM orders WHERE total_amount > 0
+    GROUP BY 1
 )
 SELECT 
-    c.customer_name,
-    SUM(o.total_amount) as total_spent
-FROM customers c
-JOIN orders o ON c.customer_id = o.customer_id
-GROUP BY c.customer_name
-HAVING SUM(o.total_amount) > (SELECT global_avg FROM AvgOrderValue);
-
--- QUERY 5: Customer Retention - Days Between Orders (LAG Function)
--- Goal: Analyze customer behavior by measuring the gap between purchases.
-SELECT 
-    customer_id,
-    order_date,
-    LAG(order_date) OVER (PARTITION BY customer_id ORDER BY order_date) as previous_order,
-    order_date - LAG(order_date) OVER (PARTITION BY customer_id ORDER BY order_date) as days_diff
-FROM orders;
+    cv.customer_id,
+    cv.ltv,
+    PERCENT_RANK() OVER (ORDER BY cv.ltv DESC) as spender_tier
+FROM CustomerValue cv;
