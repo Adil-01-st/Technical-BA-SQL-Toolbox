@@ -1,4 +1,3 @@
-# Technical-BA-SQL-Toolbox
 
 # Technical-BA-SQL-Toolbox 📊
 **Converting Raw Data into Strategic Business Decisions**
